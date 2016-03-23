@@ -1,8 +1,22 @@
+extern crate csv;
 extern crate getopts;
 extern crate rustc_serialize;
 
 use getopts::Options;
 use std::env;
+use std::fs;
+use std::path::Path;
+
+#[derive(Debug, RustcDecodable)]
+struct Row {
+    country: String,
+    city: String,
+    accent_city: String,
+    region: String,
+    population: Option<u64>,
+    latitude: Option<f64>,
+    longitude: Option<f64>,
+}
 
 fn print_usage(program: &str, opts: Options) {
     println!("{}", opts.usage(&format!("Usage: {} [options] <data-path> <city>", program)));
@@ -25,7 +39,20 @@ fn main() {
         return;
     }
 
-    let data_path = args[1].clone();
+    let data_file = args[1].clone();
+    let data_path = Path::new(&data_file);
     let city = args[2].clone();
 
+    let file = fs::File::open(data_path).unwrap();
+    let mut rdr = csv::Reader::from_reader(file);
+
+    for row in rdr.decode::<Row>() {
+        let row = row.unwrap();
+
+        if row.city == city {
+            println!("{}, {}: {:?}",
+                     row.city, row.country,
+                     row.population.expect("population_count"));
+        }
+    }
 }
