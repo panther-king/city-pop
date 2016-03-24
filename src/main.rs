@@ -5,6 +5,7 @@ extern crate rustc_serialize;
 use getopts::Options;
 use std::error::Error;
 use std::env;
+use std::fmt;
 use std::fs;
 use std::io;
 use std::path::Path;
@@ -26,12 +27,52 @@ struct PopulationCount {
     count: u64,
 }
 
+#[derive(Debug)]
+enum CliError {
+    Io(io::Error),
+    Csv(csv::Error),
+    NotFound,
+}
+
+impl fmt::Display for CliError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match *self {
+            CliError::Io(ref err) => err.fmt(f),
+            CliError::Csv(ref err) => err.fmt(f),
+            CliError::NotFound => write!(f, "No matching cities with a \
+                                             population were found."),
+        }
+    }
+}
+
+impl Error for CliError {
+    fn description(&self) -> &str {
+        match *self {
+            CliError::Io(ref err) => err.description(),
+            CliError::Csv(ref err) => err.description(),
+            CliError::NotFound => "not found",
+        }
+    }
+}
+
+impl From<io::Error> for CliError {
+    fn from(err: io::Error) -> CliError {
+        CliError::Io(err)
+    }
+}
+
+impl From<csv::Error> for CliError {
+    fn from(err: csv::Error) -> CliError {
+        CliError::Csv(err)
+    }
+}
+
 fn print_usage(program: &str, opts: Options) {
     println!("{}", opts.usage(&format!("Usage: {} [options] <city>", program)));
 }
 
 fn search<P: AsRef<Path>>(file_path: &Option<P>, city: &str)
-                          -> Result<Vec<PopulationCount>, Box<Error + Send + Sync>> {
+                          -> Result<Vec<PopulationCount>, CliError> {
     let mut found = vec![];
     let input: Box<io::Read> = match *file_path {
         None => Box::new(io::stdin()),
@@ -54,7 +95,7 @@ fn search<P: AsRef<Path>>(file_path: &Option<P>, city: &str)
     }
 
     if found.is_empty() {
-        Err(From::from("No matching cities with a population were found."))
+        Err(CliError::NotFound)
     } else {
         Ok(found)
     }
