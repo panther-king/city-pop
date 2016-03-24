@@ -3,6 +3,7 @@ extern crate getopts;
 extern crate rustc_serialize;
 
 use getopts::Options;
+use std::error::Error;
 use std::env;
 use std::fs;
 use std::path::Path;
@@ -28,13 +29,14 @@ fn print_usage(program: &str, opts: Options) {
     println!("{}", opts.usage(&format!("Usage: {} [options] <data-path> <city>", program)));
 }
 
-fn search<P: AsRef<Path>>(file_path: P, city: &str) -> Vec<PopulationCount> {
+fn search<P: AsRef<Path>>(file_path: P, city: &str)
+                          -> Result<Vec<PopulationCount>, Box<Error + Send + Sync>> {
     let mut found = vec![];
-    let file = fs::File::open(file_path).unwrap();
+    let file = try!(fs::File::open(file_path));
     let mut rdr = csv::Reader::from_reader(file);
 
     for row in rdr.decode::<Row>() {
-        let row = row.unwrap();
+        let row = try!(row);
         match row.population {
             None => {},
             Some(count) => if row.city == city {
@@ -46,7 +48,12 @@ fn search<P: AsRef<Path>>(file_path: P, city: &str) -> Vec<PopulationCount> {
             },
         }
     }
-    found
+
+    if found.is_empty() {
+        Err(From::from("No matching cities with a population were found."))
+    } else {
+        Ok(found)
+    }
 }
 
 fn main() {
@@ -58,7 +65,7 @@ fn main() {
 
     let matches = match opts.parse(&args[1..]) {
         Ok(m) => m,
-        Err(e) => { panic!(e.to_string()) }
+        Err(e) => { panic!(e.to_string()) },
     };
 
     if matches.opt_present("h") {
@@ -70,7 +77,12 @@ fn main() {
     let data_path = Path::new(&data_file);
     let city = args[2].clone();
 
-    for pop in search(&data_path, &city) {
-        println!("{}, {}: {:?}", pop.city, pop.country, pop.count);
+    match search(&data_path, &city) {
+        Ok(pops) => {
+            for pop in pops {
+                println!("{}, {}: {:?}", pop.city, pop.country, pop.count);
+            }
+        },
+        Err(err) => println!("{}", err),
     }
 }
