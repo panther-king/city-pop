@@ -8,6 +8,7 @@ use std::env;
 use std::fmt;
 use std::fs;
 use std::io;
+use std::process;
 use std::path::Path;
 
 #[derive(Debug, RustcDecodable)]
@@ -108,6 +109,7 @@ fn main() {
     let mut opts = Options::new();
     opts.optopt("f", "file", "Choose an input file, instead of STDIN.", "NAME");
     opts.optflag("h", "help", "Show this usage message.");
+    opts.optflag("q", "quiet", "Silences errors and warnings.");
 
     let matches = match opts.parse(&args[1..]) {
         Ok(m) => m,
@@ -129,11 +131,10 @@ fn main() {
     };
 
     match search(&data_file, &city) {
-        Ok(pops) => {
-            for pop in pops {
-                println!("{}, {}: {:?}", pop.city, pop.country, pop.count);
-            }
+        Err(CliError::NotFound) if matches.opt_present("q") => process::exit(1),
+        Err(err) => panic!("{}", err),
+        Ok(pops) => for pop in pops {
+            println!("{}, {}: {:?}", pop.city, pop.country, pop.count);
         },
-        Err(err) => println!("{}", err),
     }
 }
